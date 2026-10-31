@@ -28,3 +28,4 @@ crm-data/
 *crm_import*.json
 .env
 .env.*
+!.env.example
