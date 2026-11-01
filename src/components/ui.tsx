@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import type { CrmEvent, PersonSummary } from '../api/types.ts'
+import type { CrmEvent, PersonSummary, SponsorStatus } from '../api/types.ts'
 import { platforms } from '../platforms.ts'
+import { sponsorStatuses } from '../sponsors.ts'
 
 const paths: Record<string, ReactNode> = {
   grid: <><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></>,
@@ -17,6 +18,7 @@ const paths: Record<string, ReactNode> = {
   exit: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4m7 14 5-5-5-5m5 5H9" /></>,
   sparkle: <><path d="m12 3 2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6L12 3Z" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="3" /><path d="m3 6 9 7 9-7" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
 }
 
 export function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -48,6 +50,11 @@ export function StatusPill({ person }: { person: Pick<PersonSummary, 'paid' | 's
             : person.replied === 'yes' ? ['Replied', 'purple']
               : person.replied === 'no' ? ['No reply', 'neutral'] : ['Unknown', 'neutral']
   return <span className={`status-pill ${status[1]}`}>{status[0] === 'Paid' && <Icon name="check" size={12} />}{status[0]}</span>
+}
+
+export function SponsorStatusPill({ status }: { status: SponsorStatus }) {
+  const info = sponsorStatuses.find(item => item.value === status) ?? sponsorStatuses[0]!
+  return <span className={`status-pill ${info.color}`}>{info.label}</span>
 }
 
 export function EventPicker({ events, value, onChange, all = false, id = 'event-picker' }: {

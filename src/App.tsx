@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createApi } from './api/client.ts'
 import { createDemoApi } from './api/demo.ts'
 import { authExpiredEvent, isValidSession, readSession, saveSession } from './api/auth.ts'
-import type { CrmApi, CrmEvent, PeopleFilters, Session } from './api/types.ts'
+import type { CrmApi, CrmEvent, PeopleFilters, Session, SponsorFilters } from './api/types.ts'
 import { config } from './config.ts'
 import { useHashRoute, useResource } from './hooks.ts'
 import { Icon } from './components/ui.tsx'
 import { OverviewPage } from './pages/Overview.tsx'
 import { PeoplePage } from './pages/People.tsx'
 import { PersonPage } from './pages/Person.tsx'
+import { SponsorsPage } from './pages/Sponsors.tsx'
+import { SponsorPage } from './pages/Sponsor.tsx'
 import './App.css'
 
 const noEvents: CrmEvent[] = []
@@ -51,13 +53,21 @@ function Login({ api, onLogin, expired }: { api: CrmApi; onLogin: (session: Sess
 }
 
 function Workspace({ api, onSignOut }: { api: CrmApi; onSignOut: () => void }) {
-  const hash = useHashRoute()
+  const navigationGuard = useRef<() => boolean>(() => true)
+  const setNavigationGuard = useCallback((guard: () => boolean) => { navigationGuard.current = guard }, [])
+  const hash = useHashRoute(() => navigationGuard.current())
   const personMatch = /^#\/people\/([^/]+)$/.exec(hash)
+  const sponsorMatch = /^#\/sponsors\/([^/]+)$/.exec(hash)
   let personId = ''
+  let sponsorId = ''
   try { personId = personMatch ? decodeURIComponent(personMatch[1]!) : '' } catch { /* Malformed links fall back to the overview. */ }
+  try { sponsorId = sponsorMatch ? decodeURIComponent(sponsorMatch[1]!) : '' } catch { /* Malformed links fall back to the overview. */ }
   const isPeople = hash === '#/people'
+  const isSponsors = hash === '#/sponsors'
+  const isDetail = !!personId || !!sponsorId
   const [selectedEvent, setSelectedEvent] = useState<string>(config.defaultEvent)
   const [filters, setFilters] = useState<PeopleFilters>({ q: '', event: config.defaultEvent, status: '' })
+  const [sponsorFilters, setSponsorFilters] = useState<SponsorFilters>({ q: '', status: '' })
   const [revision, setRevision] = useState(0)
   const [toast, setToast] = useState('')
   const returnRoute = useRef('')
@@ -68,8 +78,8 @@ function Workspace({ api, onSignOut }: { api: CrmApi; onSignOut: () => void }) {
   useEffect(() => {
     window.scrollTo({ top: 0 })
     main.current?.focus({ preventScroll: true })
-    document.title = `${personId ? 'Connection' : isPeople ? 'People' : 'Overview'} · F8 Social Club`
-  }, [hash, personId, isPeople])
+    document.title = `${sponsorId === 'new' ? 'Add sponsor' : sponsorId ? 'Sponsor' : personId ? 'Connection' : isPeople ? 'People' : isSponsors ? 'Sponsors' : 'Overview'} · F8 Social Club`
+  }, [hash, personId, sponsorId, isPeople, isSponsors])
   useEffect(() => {
     if (!toast) return
     const timer = setTimeout(() => setToast(''), 4500)
@@ -88,20 +98,26 @@ function Workspace({ api, onSignOut }: { api: CrmApi; onSignOut: () => void }) {
     setToast(config.demo ? 'Saved to your demo. Refresh to reset.' : 'Connection updated. Nice follow-through.')
   }
   function openPerson() { returnRoute.current = hash }
+  function sponsorSaved() {
+    setRevision(current => current + 1)
+    setToast(config.demo ? 'Sponsor saved to your demo. Refresh to reset.' : 'Sponsor saved. Keep the conversation going.')
+  }
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); main.current?.focus() }}>Skip to content</a>
     <header className="app-header"><a className="brand-link" href="#/overview" aria-label="F8 Social Club overview"><Brand /></a><div className="header-right"><span className="workspace-label"><span className="live-dot" />FAITH’S WORKSPACE</span>
-      <details className="account-menu"><summary aria-label="Workspace menu"><span className="account-avatar">F</span><span className="menu-chevron" aria-hidden="true"><Icon name="arrow" size={13} /></span></summary><div className="account-dropdown"><strong>F8 Social Club</strong><span>{config.demo ? 'Fictional demo workspace' : 'Private outreach CRM'}</span>{config.demo ? <button onClick={() => window.location.reload()}><Icon name="back" size={16} />Reset demo data</button> : <button onClick={onSignOut}><Icon name="exit" size={16} />Sign out</button>}</div></details>
+      <details className="account-menu"><summary aria-label="Workspace menu"><span className="account-avatar">F</span><span className="menu-chevron" aria-hidden="true"><Icon name="arrow" size={13} /></span></summary><div className="account-dropdown"><strong>F8 Social Club</strong><span>{config.demo ? 'Fictional demo workspace' : 'Private outreach CRM'}</span>{config.demo ? <button onClick={() => window.location.reload()}><Icon name="back" size={16} />Reset demo data</button> : <button onClick={() => { if (navigationGuard.current()) onSignOut() }}><Icon name="exit" size={16} />Sign out</button>}</div></details>
     </div></header>
-    {config.demo && <aside className="demo-banner" aria-label="Demo workspace notice"><span><strong>Demo mode</strong> · All people are fictional. Edits reset on refresh.</span>{!config.demoForced && <a href={window.location.pathname}>Exit demo<Icon name="arrow" size={12} /></a>}</aside>}
+    {config.demo && <aside className="demo-banner" aria-label="Demo workspace notice"><span><strong>Demo mode</strong> · All contacts and businesses are fictional. Edits reset on refresh.</span>{!config.demoForced && <a href={window.location.pathname}>Exit demo<Icon name="arrow" size={12} /></a>}</aside>}
     {eventResource.error && <div className="event-load-error" role="alert">Could not load the event picker. <button className="text-button" onClick={eventResource.retry}>Retry events</button></div>}
-    <main id="main-content" ref={main} tabIndex={-1} className={`main-content ${personId ? 'detail-main' : ''}`}>
-      {personId ? <PersonPage key={personId} api={api} id={personId} onBack={back} onSaved={saved} />
-        : isPeople ? <PeoplePage api={api} events={events} filters={filters} onFiltersChange={setFilters} revision={revision} onOpenPerson={openPerson} />
+    <main id="main-content" ref={main} tabIndex={-1} className={`main-content ${isDetail ? 'detail-main' : ''}`}>
+      {sponsorId ? <SponsorPage key={sponsorId} api={api} id={sponsorId} onBack={() => { window.location.hash = '#/sponsors' }} onSaved={sponsorSaved} setNavigationGuard={setNavigationGuard} />
+        : personId ? <PersonPage key={personId} api={api} id={personId} onBack={back} onSaved={saved} />
+          : isSponsors ? <SponsorsPage api={api} filters={sponsorFilters} onFiltersChange={setSponsorFilters} revision={revision} />
+            : isPeople ? <PeoplePage api={api} events={events} filters={filters} onFiltersChange={setFilters} revision={revision} onOpenPerson={openPerson} />
           : <OverviewPage api={api} events={events} selectedEvent={eventKey} onEventChange={setSelectedEvent} revision={revision} onOpenPerson={openPerson} />}
     </main>
-    {!personId && <nav className="bottom-nav" aria-label="Main navigation"><a href="#/overview" className={!isPeople ? 'active' : ''} aria-current={!isPeople ? 'page' : undefined}><Icon name="grid" size={21} /><span>Overview</span></a><a href="#/people" className={isPeople ? 'active' : ''} aria-current={isPeople ? 'page' : undefined}><Icon name="people" size={21} /><span>People</span></a></nav>}
+    {!isDetail && <nav className="bottom-nav" aria-label="Main navigation"><a href="#/overview" className={!isPeople && !isSponsors ? 'active' : ''} aria-current={!isPeople && !isSponsors ? 'page' : undefined}><Icon name="grid" size={21} /><span>Overview</span></a><a href="#/people" className={isPeople ? 'active' : ''} aria-current={isPeople ? 'page' : undefined}><Icon name="people" size={21} /><span>People</span></a><a href="#/sponsors" className={isSponsors ? 'active' : ''} aria-current={isSponsors ? 'page' : undefined}><Icon name="sparkle" size={21} /><span>Sponsors</span></a></nav>}
     <div className="toast-region" role="status" aria-live="polite">{toast && <div className="toast"><Icon name="check" size={17} />{toast}</div>}</div>
   </div>
 }

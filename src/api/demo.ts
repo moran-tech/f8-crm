@@ -1,7 +1,9 @@
 import type {
   Answer, CrmApi, CrmEvent, EventStatus, PeopleFilters, PersonDetail,
-  PersonSummary, PlatformStats,
+  PersonSummary, PlatformStats, Sponsor, SponsorCreate, SponsorPatch, SponsorSummary,
 } from './types.ts'
+import { ApiError } from './client.ts'
+import { plainDate, sponsorEvent, sponsorLevels, sponsorStatuses } from '../sponsors.ts'
 
 const events: CrmEvent[] = [
   { key: 'eoy-mixer', name: 'End of Year Mixer', date: '2026-12-05', venue: 'Studio Nazrana' },
@@ -122,9 +124,49 @@ function matchesStatus(person: PersonSummary, detail: PersonDetail, filters: Peo
   }
 }
 
+function seedSponsors(): Sponsor[] {
+  const businesses = [
+    'Maple Leaf Fitness', 'Moonbeam Bakery', 'Cloudberry Studio', 'Acorn & Orbit',
+    'Paper Lantern Café', 'Velvet Fern Florals', 'Daydream Dental', 'Starlight Cycles',
+    'Honeybee Books', 'Pebble & Pine', 'Clover Cloud Spa', 'Marshmallow Media',
+    'Origami Owl Designs', 'Jellybean Juice', 'Rainbow Room',
+  ]
+  return businesses.map((business, index) => ({
+    id: `demo-sponsor-${index + 1}`, event_key: sponsorEvent, business_name: `${business} (demo)`,
+    contact_name: `Demo ${names[index]}`, email: `sponsor.${index + 1}@example.com`,
+    category: ['Fitness', 'Food & drink', 'Creative'][index % 3]!,
+    area: ['Demo North', 'Demo Centre', 'Demo South'][index % 3]!,
+    date_pitched: index % 6 === 0 ? null : '2026-10-28',
+    status: sponsorStatuses[index % sponsorStatuses.length]!.value,
+    level: index % 6 === 4 ? 'gold' : index % 6 === 3 ? 'silver' : null,
+    amount_cents: index % 6 === 4 ? 50_000 : index % 6 === 3 ? 30_000 : null,
+    follow_up_date: [1, 2, 3].includes(index % 6) ? '2026-10-30' : null,
+    notes: 'Entirely fictional sponsor. Use this demo to try a pitch, a follow-up, or a package change.',
+    source: 'Fictional demo fixture',
+    created_at: '2026-10-25T18:00:00Z', updated_at: '2026-10-28T18:00:00Z',
+  }))
+}
+
+function validateSponsor(sponsor: Sponsor) {
+  const invalid = () => { throw new ApiError('Check the sponsor fields and try again.', 400, 'validation') }
+  if (typeof sponsor.business_name !== 'string' || !sponsor.business_name.trim()
+    || typeof sponsor.event_key !== 'string' || !sponsor.event_key.trim()) invalid()
+  if (!sponsorStatuses.some(status => status.value === sponsor.status)) invalid()
+  if (sponsor.level !== null && !sponsorLevels.some(level => level.value === sponsor.level)) invalid()
+  if (sponsor.amount_cents !== null && (!Number.isSafeInteger(sponsor.amount_cents) || sponsor.amount_cents < 0)) invalid()
+  for (const key of ['date_pitched', 'follow_up_date'] as const) {
+    if (sponsor[key] !== null && !plainDate(sponsor[key])) invalid()
+  }
+  for (const key of ['contact_name', 'email', 'category', 'area', 'notes', 'source'] as const) {
+    if (sponsor[key] !== null && typeof sponsor[key] !== 'string') invalid()
+  }
+}
+
 /** A fresh, isolated fake database. Changes last until the page is reloaded. */
 export function createDemoApi(latency = 180): CrmApi {
   const people = seedPeople()
+  const sponsors = seedSponsors()
+  let sponsorSequence = sponsors.length
   const resolve = async <T,>(value: T): Promise<T> => {
     if (latency) await new Promise(done => setTimeout(done, latency))
     return structuredClone(value)
@@ -133,6 +175,42 @@ export function createDemoApi(latency = 180): CrmApi {
     const detail = people.find(item => item.person.id === id)
     if (!detail) throw new Error('This demo contact could not be found.')
     return detail
+  }
+  const findSponsor = (id: string) => {
+    const sponsor = sponsors.find(item => item.id === id)
+    if (!sponsor) throw new ApiError('This demo sponsor could not be found.', 404)
+    return sponsor
+  }
+  const platinumHolder = (event: string, exceptId = '') => sponsors.find(item =>
+    item.event_key === event && item.id !== exceptId && item.level === 'platinum' && item.status !== 'declined')
+  function saveSponsor(input: SponsorCreate | SponsorPatch, existing?: Sponsor) {
+    const now = new Date().toISOString()
+    const base: Sponsor = existing ?? {
+      id: `demo-sponsor-${sponsorSequence + 1}`, event_key: sponsorEvent, business_name: '',
+      contact_name: null, email: null, category: null, area: null, date_pitched: null,
+      status: 'not_contacted', level: null, amount_cents: null, follow_up_date: null,
+      notes: null, source: null, created_at: now, updated_at: now,
+    }
+    const next = { ...base }
+    // Only writable fields, and undefined is not a PATCH.
+    for (const key of Object.keys(base) as (keyof Sponsor)[]) {
+      if (key === 'id' || key === 'created_at' || key === 'updated_at') continue
+      if (input[key] !== undefined) Object.assign(next, { [key]: input[key] })
+    }
+    validateSponsor(next)
+    next.business_name = next.business_name.trim()
+    if (sponsors.some(item => item.id !== next.id && item.event_key === next.event_key
+      && item.business_name.toLowerCase() === next.business_name.toLowerCase())) {
+      throw new ApiError('A sponsor with this business name already exists for this event.', 409, 'duplicate')
+    }
+    const holder = platinumHolder(next.event_key, next.id)
+    if (next.level === 'platinum' && next.status !== 'declined' && holder) {
+      throw new ApiError(`Platinum is already taken by ${holder.business_name}. Choose another level.`, 409, 'platinum_taken')
+    }
+    next.updated_at = now
+    if (existing) Object.assign(existing, next)
+    else { sponsors.push(next); sponsorSequence++ }
+    return next
   }
   return {
     async login() {
@@ -162,6 +240,41 @@ export function createDemoApi(latency = 180): CrmApi {
       }
       Object.assign(detail.person, summary(detail))
       return resolve(detail)
+    },
+    async sponsors(filters) {
+      const query = filters.q?.trim().toLowerCase() ?? ''
+      return resolve(sponsors.filter(item =>
+        (!filters.event || item.event_key === filters.event) && (!filters.status || item.status === filters.status)
+        && (!query || [item.business_name, item.contact_name, item.email, item.category, item.area].join(' ').toLowerCase().includes(query))))
+    },
+    async sponsor(id) { return resolve(findSponsor(id)) },
+    async createSponsor(input) { return resolve(saveSponsor(input)) },
+    async updateSponsor(id, patch) { return resolve(saveSponsor(patch, findSponsor(id))) },
+    async sponsorSummary(event) {
+      const list = sponsors.filter(item => item.event_key === event)
+      const holder = platinumHolder(event)
+      const today = new Date()
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      const statusCount = (status: Sponsor['status']) => list.filter(item => item.status === status).length
+      const total = (status: Sponsor['status']) => list.filter(item => item.status === status).reduce((sum, item) => sum + (item.amount_cents ?? 0), 0)
+      const data: SponsorSummary = {
+        event_key: event, total: list.length,
+        by_status: {
+          not_contacted: statusCount('not_contacted'), pitched: statusCount('pitched'),
+          replied: statusCount('replied'), interested: statusCount('interested'),
+          confirmed: statusCount('confirmed'), declined: statusCount('declined'),
+        },
+        committed_cents: total('confirmed'), pipeline_cents: total('interested'),
+        platinum: { taken: !!holder, holder: holder ? { id: holder.id, business_name: holder.business_name, status: holder.status } : null },
+        levels: {
+          platinum: list.filter(item => item.level === 'platinum' && item.status !== 'declined').length,
+          gold: list.filter(item => item.level === 'gold' && item.status !== 'declined').length,
+          silver: list.filter(item => item.level === 'silver' && item.status !== 'declined').length,
+        },
+        follow_ups_due: list.filter(item => item.follow_up_date && item.follow_up_date <= date
+          && item.status !== 'confirmed' && item.status !== 'declined').length,
+      }
+      return resolve(data)
     },
     async overview(key) {
       const event = events.find(item => item.key === key)

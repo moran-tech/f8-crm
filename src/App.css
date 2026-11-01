@@ -125,7 +125,7 @@ details[open] > summary .details-chevron { transform: rotate(90deg); }
 .invited-person > strong { font-size: 13px; font-weight: 550; }
 .invited-list a > svg:last-child { color: #9e909b; }
 .page-endnote { text-align: center; margin-top: 28px; font-size: 11px; color: #746771; }
-.bottom-nav { position: fixed; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; width: 280px; background: #fffcf9f5; backdrop-filter: blur(15px); border: 1px solid #e4dbe2; padding: 6px; border-radius: 18px; box-shadow: 0 5px 35px #38203718; }
+.bottom-nav { position: fixed; z-index: 20; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; width: 390px; max-width: 100%; background: #fffcf9f5; backdrop-filter: blur(15px); border: 1px solid #e4dbe2; padding: 6px; border-radius: 18px; box-shadow: 0 5px 35px #38203718; }
 .bottom-nav a { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; font-size: 12px; font-weight: 550; color: #756771; border-radius: 12px; }
 .bottom-nav a.active { background: var(--plum); color: #fff6f0; }
 .people-filters { position: sticky; top: 0; z-index: 10; background: #f8f6f2f7; backdrop-filter: blur(14px); padding: 8px 0 14px; }
@@ -246,6 +246,60 @@ details[open] > summary .details-chevron { transform: rotate(90deg); }
 .login-footer { position: absolute; bottom: 30px; font-size: 8px; letter-spacing: 1.4px; color: #746570; }
 .login-mobile-brand { display: none; }
 .session-notice { font-size: 12px; color: #886138; background: #f5ecdc; border-radius: 8px; padding: 12px; margin-top: 20px; }
+.status-pill.blue, .sponsor-count.blue { background: #eaf1f8; color: #27618c; }
+.status-pill.rose, .sponsor-count.rose { background: #f9eaf0; color: #9c3951; }
+.sponsor-heading { align-items: center; }
+.sponsor-summary { display: grid; gap: 14px; }
+.sponsor-total-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.sponsor-money, .platinum-card { padding: 22px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.sponsor-money > strong { font-size: 34px; letter-spacing: -1.2px; font-weight: 550; }
+.sponsor-money > span:last-child { font-size: 12px; color: var(--muted); }
+.sponsor-money b { color: var(--ink); font-weight: 550; }
+.sponsor-money small { font-size: 10px; }
+.platinum-card { background: var(--plum); color: #fff6ef; border-color: var(--plum); }
+.platinum-card .eyebrow { color: #dac8d7; display: flex; align-items: center; gap: 7px; }
+.platinum-card > strong { background: #eaf2e8; color: #3f6544; padding: 5px 12px; border-radius: 7px; width: fit-content; font-size: 22px; font-weight: 550; }
+.platinum-card.taken > strong { background: #f7f0db; color: #886618; }
+.platinum-card > span:last-child { font-size: 12px; line-height: 1.6; color: #e2d4df; overflow-wrap: anywhere; }
+.sponsor-counts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.sponsor-count { padding: 11px 12px; background: #f1edef; color: #736573; border-radius: 9px; display: flex; align-items: center; justify-content: space-between; gap: 5px; flex-direction: column; }
+.sponsor-count strong { font-size: 21px; font-weight: 550; }
+.sponsor-count span { font-size: 10px; }
+.sponsor-count.green { background: #eaf2e8; color: #3f6544; }
+.sponsor-count.purple { background: #f0e7f0; color: #775072; }
+.sponsor-count.amber { background: #f7f0db; color: #886618; }
+.sponsor-followups { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; color: #886618; font-size: 11px; }
+.sponsor-followups strong { font-weight: 550; }
+.sponsor-followups > span { color: var(--muted); }
+.sponsor-packages { margin: 4px 0 9px; font-size: 12px; }
+.sponsor-status-filters { flex-wrap: wrap; margin-top: 10px; gap: 6px; }
+.sponsor-status-filters button { flex: none; min-height: 44px; padding: 8px 13px; }
+.sponsor-filters { padding-bottom: 0; }
+.sponsor-filters .results-heading { margin-bottom: 0; }
+.sponsor-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, .8fr); gap: 16px; padding: 18px 24px; min-height: 88px; align-items: center; }
+.sponsor-row.people-table-heading { min-height: 44px; }
+.sponsor-location { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.sponsor-level { display: flex; flex-direction: column; gap: 5px; min-width: 0; overflow-wrap: anywhere; }
+.sponsor-level strong { font-size: 12px; font-weight: 550; }
+.sponsor-level small { font-size: 11px; color: var(--muted); }
+.sponsor-profile .section-heading { margin-bottom: 14px; }
+.sponsor-profile .section-heading .eyebrow { margin: 0; }
+.sponsor-profile h1 { margin-bottom: 10px; }
+.sponsor-edit-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 16px; }
+.sponsor-edit-grid > * { min-width: 0; }
+.sponsor-edit-grid input, .sponsor-edit-grid select { width: 100%; }
+.full-field { grid-column: 1 / -1; }
+.sponsor-email .text-button { font-size: 12px; }
+.sponsor-source { margin-top: 20px; }
+.sponsor-availability { padding: 12px; background: #eaf2e8; color: #3f6544; border-radius: 8px; font-size: 12px; margin-bottom: 20px; }
+.sponsor-availability.unavailable { background: #f7f0db; color: #886618; }
+.sponsor-availability-error { margin-bottom: 16px; }
+.sponsor-field-help { margin-top: 14px; }
+.sponsor-save-bar { position: sticky; bottom: 12px; z-index: 10; box-shadow: 0 4px 20px #38203710; }
+.sponsor-record-meta { display: flex; flex-wrap: wrap; gap: 14px 25px; margin: 25px 0 0; color: var(--muted); font-size: 10px; }
+.sponsor-record-meta div { max-width: 100%; }
+.sponsor-record-meta dt { font-weight: 550; }
+.sponsor-record-meta dd { margin: 5px 0 0; overflow-wrap: anywhere; }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -363,6 +417,37 @@ details[open] > summary .details-chevron { transform: rotate(90deg); }
   .save-bar { padding: 14px; flex-wrap: wrap; }
   .save-bar .button { width: 100%; margin-top: 4px; }
   .save-bar strong { font-size: 12px; }
+  .sponsor-heading { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 14px; }
+  .sponsor-heading .button { min-height: 46px; padding: 10px 14px; font-size: 12px; }
+  .sponsor-total-cards { gap: 10px; }
+  .sponsor-summary { gap: 12px; }
+  .sponsor-money, .platinum-card { padding: 17px 14px; border-radius: 12px; gap: 9px; }
+  .sponsor-money .eyebrow, .platinum-card .eyebrow { font-size: 7px; letter-spacing: .8px; }
+  .platinum-card .eyebrow { gap: 4px; }
+  .sponsor-money > strong { font-size: 29px; }
+  .sponsor-money > span:last-child { font-size: 10px; line-height: 1.6; }
+  .sponsor-money small { display: block; font-size: 9px; }
+  .platinum-card > strong { font-size: 21px; }
+  .platinum-card > span:last-child { font-size: 10px; }
+  .sponsor-counts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .sponsor-count { flex-direction: row; padding: 9px 10px; }
+  .sponsor-count strong { font-size: 18px; }
+  .sponsor-count span { font-size: 9px; }
+  .sponsor-followups { gap: 5px; font-size: 10px; }
+  .sponsor-status-filters { flex-wrap: nowrap; overflow-x: auto; padding: 4px; margin-inline: -4px; width: calc(100% + 8px); scrollbar-width: thin; }
+  .sponsor-status-filters button { flex: none; padding-inline: 11px; min-height: 44px; }
+  .sponsor-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, .9fr) minmax(0, 1.15fr) minmax(0, .8fr); padding: 16px 10px; gap: 7px; min-height: 98px; }
+  .sponsor-row.people-table-heading { font-size: 8px; letter-spacing: 0; padding-block: 13px; min-height: 44px; }
+  .sponsor-row .person-name strong { font-size: 11px; }
+  .sponsor-row .person-name small { font-size: 9px; }
+  .sponsor-location { font-size: 9px; line-height: 1.6; }
+  .sponsor-row .status-pill { font-size: 9px; padding: 5px; white-space: normal; text-align: center; }
+  .sponsor-level strong { font-size: 10px; }
+  .sponsor-level small { font-size: 9px; }
+  .sponsor-edit-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .sponsor-profile .section-heading { align-items: flex-start; }
+  .sponsor-profile .section-heading .eyebrow { max-width: 150px; line-height: 1.6; }
+  .sponsor-save-bar { bottom: max(8px, env(safe-area-inset-bottom)); }
   .touch-history { margin-top: 33px; }
   .timeline li { padding-left: 31px; padding-bottom: 19px; }
   .timeline-dot { width: 23px; height: 23px; }
