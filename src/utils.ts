@@ -17,3 +17,11 @@ export function safeContactLink(contact: string): string | undefined {
   } catch { /* Non-link contact values are rendered as plain text. */ }
   return undefined
 }
+
+export function safeEmailLink(email: string): string | undefined {
+  const value = email.trim()
+  // Only a single, plain mailbox, no URL schemes, query strings, or encoded headers.
+  return /^[a-z0-9.!_+-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/i.test(value)
+    && value.length <= 254 && !value.startsWith('.') && !value.includes('..')
+    ? `mailto:${value}` : undefined
+}

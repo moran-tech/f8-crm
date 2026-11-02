@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useState } from 'react'
+import { watchHashRoute } from './hashRoute.ts'
 
 export function useResource<T>(key: string, load: () => Promise<T>) {
   const fetchData = useEffectEvent(load)
@@ -32,12 +33,9 @@ export function useDebounced<T>(value: T, delay = 250) {
   return settled
 }
 
-export function useHashRoute() {
+export function useHashRoute(beforeNavigate?: () => boolean) {
   const [hash, setHash] = useState(() => window.location.hash || '#/overview')
-  useEffect(() => {
-    const update = () => setHash(window.location.hash || '#/overview')
-    window.addEventListener('hashchange', update)
-    return () => window.removeEventListener('hashchange', update)
-  }, [])
+  const canNavigate = useEffectEvent(() => beforeNavigate?.() ?? true)
+  useEffect(() => watchHashRoute(canNavigate, setHash), [])
   return hash
 }

@@ -98,6 +98,46 @@ export interface Session {
   expiresAt: string
 }
 
+export type SponsorStatus = 'not_contacted' | 'pitched' | 'replied' | 'interested' | 'confirmed' | 'declined'
+export type SponsorLevel = 'platinum' | 'gold' | 'silver'
+
+export interface Sponsor {
+  id: string
+  event_key: string
+  business_name: string
+  contact_name: string | null
+  email: string | null
+  category: string | null
+  area: string | null
+  date_pitched: string | null
+  status: SponsorStatus
+  level: SponsorLevel | null
+  amount_cents: number | null
+  follow_up_date: string | null
+  notes: string | null
+  source: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SponsorPatch = Partial<Omit<Sponsor, 'id' | 'created_at' | 'updated_at'>>
+export type SponsorCreate = SponsorPatch & { business_name: string }
+export interface SponsorFilters {
+  q?: string
+  status?: SponsorStatus | ''
+  event?: string
+}
+export interface SponsorSummary {
+  event_key: string
+  total: number
+  by_status: Record<SponsorStatus, number>
+  committed_cents: number
+  pipeline_cents: number
+  platinum: { taken: boolean; holder: Pick<Sponsor, 'id' | 'business_name' | 'status'> | null }
+  levels: Record<SponsorLevel, number>
+  follow_ups_due: number
+}
+
 export interface CrmApi {
   login(password: string): Promise<Session>
   events(): Promise<CrmEvent[]>
@@ -105,4 +145,9 @@ export interface CrmApi {
   person(id: string): Promise<PersonDetail>
   updatePerson(id: string, patch: PersonPatch): Promise<PersonDetail>
   overview(event: string): Promise<Overview>
+  sponsors(filters: SponsorFilters): Promise<Sponsor[]>
+  sponsor(id: string): Promise<Sponsor>
+  createSponsor(input: SponsorCreate): Promise<Sponsor>
+  updateSponsor(id: string, patch: SponsorPatch): Promise<Sponsor>
+  sponsorSummary(event: string): Promise<SponsorSummary>
 }

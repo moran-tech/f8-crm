@@ -1,6 +1,6 @@
 # F8 Social Club · Outreach CRM
 
-A private, phone-first workspace for Faith’s event outreach in Surrey, BC. Built with React, TypeScript, and plain CSS. Overview → People → editable connection details, with hash URLs that work on GitHub Pages.
+A private, phone-first workspace for Faith’s event outreach in Surrey, BC. Built with React, TypeScript, and plain CSS. Overview, People, and Sponsors tabs with editable details and hash URLs that work on GitHub Pages.
 
 **Site:** https://moran-tech.github.io/f8-crm/
 
@@ -27,13 +27,16 @@ npm run preview -- --host 127.0.0.1
 
 Open `/f8-crm/?demo=1` (including in preview or on the deployed site). This bypasses login and switches **every CRM operation** to `src/api/demo.ts`. Alternatively set `VITE_DEMO=1` before starting Vite or building.
 
-The in-memory demo has 25 explicitly fictional contacts, two events, overlapping platforms, full touch histories, a not-contacted person, and three $37.55 payments. One payment is outside direct outreach. Names start with “Demo,” organizations are fictional, and contact addresses use `example.invalid`. Search, filters, edits, and overview calculations work. Edits last only until refresh; the workspace menu can reset the demo. Demo mode never sends login, people, or edit requests to the backend and does not persist contact data.
+The in-memory demo has 25 explicitly fictional contacts, two events, overlapping platforms, full touch histories, a not-contacted person, and three $37.55 payments. One payment is outside direct outreach. Names start with “Demo,” organizations are fictional, and contact addresses use `example.invalid`. It also has 15 fictional sponsor businesses marked “(demo),” with `example.com` emails, all six statuses, confirmed Gold and interested Silver packages, and Platinum initially open. Search, filters, creates, edits, conflicts, and summary calculations work. Edits last only until refresh; the workspace menu can reset the demo. Demo mode never sends CRM requests to the backend and does not persist contact or sponsor data.
 
 Examples:
 
 - Overview: `/f8-crm/?demo=1#/overview`
 - People: `/f8-crm/?demo=1#/people`
 - Detail: `/f8-crm/?demo=1#/people/1`
+- Sponsors: `/f8-crm/?demo=1#/sponsors`
+- Sponsor detail: `/f8-crm/?demo=1#/sponsors/demo-sponsor-1`
+- Add sponsor: `/f8-crm/?demo=1#/sponsors/new`
 
 ## Configuration and privacy
 
@@ -65,8 +68,11 @@ src/
     Overview.tsx         Event numbers, funnel, platform results, invitees
     People.tsx           Search, event/platform/kind/status filters, four-column list
     Person.tsx           Contact, event editor, save feedback, touch timeline
+    Sponsors.tsx         Mixer summary, search/status filters, four-column list
+    Sponsor.tsx          Create/edit form, availability, unsaved-change warning
   hooks.ts               Race-safe loading, debounced search, hash routing
   platforms.ts / utils.ts Labels, formatting, safe contact links
+  sponsors.ts            Sponsor labels, package amounts, plain dates, cents
   App.tsx                Login, session lifecycle, navigation, shared filters
   index.css / App.css    Responsive, accessible styles
 tests/                   API normalization, authentication, demo regression tests
@@ -82,6 +88,14 @@ docs/deploy-pages.workflow.yml
 - The Paid card and funnel count paid **outreach invitees**. Revenue, paid total, and signed-up total cover all registrations. The “paid without outreach” difference is not attributed to Meetup or another platform because the contract does not establish its source.
 - PATCH returns the full updated `{person, events, touches}` detail. Saves optimistically update displayed status, roll back on failure, retain edits for retry, and refresh summaries on return. Only existing event records can be edited. Touch history is displayed in the server’s supplied order.
 - Contact notes and per-event fields are editable. Other profile facts are read-only. Navigation away from a detail page discards unsaved edits; browser refresh/close warns when possible.
+
+### Sponsors
+
+- Sponsors are scoped to `eoy-mixer`, independent of the Overview event picker. GET `/crm/sponsors?q=&status=&event=`, GET/POST `/crm/sponsors`, GET/PATCH `/crm/sponsors/:id`, and GET `/crm/sponsors/summary?event=eoy-mixer` use the same bearer auth and 401 logout flow. GET/POST/PATCH detail responses wrap the full record in `{sponsor}`; list responses use `{sponsors}`.
+- POST sends the mixer event key and business name. PATCH sends only changed writable fields; empty optional fields send `null`. IDs and created/updated timestamps are read-only. Source is editable. Prices are CAD cents: Platinum 100000, Gold 50000, Silver 30000. Selecting a level fills only a blank amount; clearing a level does not erase a custom amount. A blank amount with a level uses the package price on save, as the form explains; without a level it stays unset. The form displays the returned amount after saving.
+- Summary counts and availability come from the backend, not the filtered list. Committed means confirmed amounts; pipeline means interested amounts. Both fall back to the package price for null amounts, including in the demo. `levels` is assumed to contain counts. A taken Platinum response without a holder still renders safely.
+- The demo reserves Platinum for **any non-declined sponsor assigned Platinum**, once per event; declining or clearing the level releases it. This matches the backend, which remains authoritative on save, including races, via 409 `platinum_taken` (holder business name shown) or `duplicate`. Demo duplicates are case-insensitive business names or non-null emails per event. Demo follow-ups due are dates on/before the local day, excluding confirmed and declined sponsors.
+- Sponsor date inputs and date-only normalization preserve calendar dates without UTC conversion. Email links accept only a plain, sane mailbox. Sponsor navigation (including hash links and browser Back), refresh/close, and sign-out warn about unsaved changes; edits remain after failed saves.
 
 ## Deploy to the existing `gh-pages` branch
 

@@ -1,8 +1,9 @@
 import { config } from '../config.ts'
 import { authExpiredEvent, isValidSession, saveSession } from './auth.ts'
+import { plainDate, sponsorEvent, sponsorLevels, sponsorStatuses } from '../sponsors.ts'
 import type {
   Answer, CrmApi, CrmEvent, EventStatus, Overview, PersonDetail,
-  PersonSummary, Response, Session, Touch,
+  PersonSummary, Response, Session, Sponsor, SponsorSummary, Touch,
 } from './types.ts'
 
 type RecordValue = Record<string, unknown>
@@ -128,12 +129,67 @@ export function normalizeOverview(value: unknown): Overview {
   }
 }
 
+const nullableText = (value: unknown): string | null => text(value) || null
+const sponsorStatus = (value: unknown): Sponsor['status'] =>
+  sponsorStatuses.find(status => status.value === value)?.value ?? 'not_contacted'
+
+export function normalizeSponsor(value: unknown): Sponsor {
+  const item = record(value)
+  return {
+    id: text(item.id),
+    event_key: text(item.event_key, sponsorEvent),
+    business_name: text(item.business_name, 'Unnamed business'),
+    contact_name: nullableText(item.contact_name),
+    email: nullableText(item.email),
+    category: nullableText(item.category),
+    area: nullableText(item.area),
+    date_pitched: plainDate(item.date_pitched),
+    status: sponsorStatus(item.status),
+    level: sponsorLevels.find(level => level.value === item.level)?.value ?? null,
+    amount_cents: item.amount_cents == null || item.amount_cents === '' ? null : count(item.amount_cents),
+    follow_up_date: plainDate(item.follow_up_date),
+    notes: nullableText(item.notes),
+    source: nullableText(item.source),
+    created_at: text(item.created_at),
+    updated_at: text(item.updated_at),
+  }
+}
+
+export function normalizeSponsorSummary(value: unknown): SponsorSummary {
+  const item = record(value)
+  const byStatus = record(item.by_status)
+  const levels = record(item.levels)
+  const platinum = record(item.platinum)
+  const holder = record(platinum.holder)
+  return {
+    event_key: text(item.event_key, sponsorEvent),
+    total: count(item.total),
+    by_status: {
+      not_contacted: count(byStatus.not_contacted), pitched: count(byStatus.pitched),
+      replied: count(byStatus.replied), interested: count(byStatus.interested),
+      confirmed: count(byStatus.confirmed), declined: count(byStatus.declined),
+    },
+    committed_cents: count(item.committed_cents),
+    pipeline_cents: count(item.pipeline_cents),
+    platinum: {
+      taken: platinum.taken === true,
+      holder: holder.id != null ? {
+        id: text(holder.id), business_name: text(holder.business_name, 'another sponsor'), status: sponsorStatus(holder.status),
+      } : null,
+    },
+    levels: { platinum: count(levels.platinum), gold: count(levels.gold), silver: count(levels.silver) },
+    follow_ups_due: count(item.follow_ups_due),
+  }
+}
+
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  code: string
+  constructor(message: string, status: number, code = '') {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -169,6 +225,16 @@ export function createApi(getSession: () => Session | null, onUnauthorized?: () 
       throw new ApiError(authenticated ? 'Your session has expired. Please sign in again.' : 'That password didn’t work. Try again.', 401)
     }
     if (!result.ok) {
+      if (path.startsWith('/crm/sponsors') && [400, 409].includes(result.status)) {
+        const data = record(await result.json().catch(() => null))
+        const code = text(data.error)
+        const message = code === 'platinum_taken'
+          ? `Platinum is already taken by ${text(record(data.holder).business_name, 'another sponsor')}. Choose another level.`
+          : code === 'duplicate' ? 'A sponsor with this business name or email already exists'
+            : result.status === 400 ? 'Check the sponsor fields and try again. The CRM could not validate these details.'
+              : 'This sponsor changed while you were editing. Check the details and try again.'
+        throw new ApiError(message, result.status, code)
+      }
       throw new ApiError(result.status === 404 ? 'This record could not be found.' : 'The CRM could not complete that request. Please try again.', result.status)
     }
     try {
@@ -205,6 +271,28 @@ export function createApi(getSession: () => Session | null, onUnauthorized?: () 
     },
     async overview(event) {
       return normalizeOverview(await request(`/crm/overview?${new URLSearchParams({ event })}`))
+    },
+    async sponsors(filters) {
+      const params = new URLSearchParams()
+      for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value)
+      const data = record(await request(`/crm/sponsors?${params}`))
+      return array(data.sponsors).map(normalizeSponsor).filter(sponsor => sponsor.id)
+    },
+    async sponsor(id) {
+      return normalizeSponsor(record(await request(`/crm/sponsors/${encodeURIComponent(id)}`)).sponsor)
+    },
+    async createSponsor(input) {
+      return normalizeSponsor(record(await request('/crm/sponsors', {
+        method: 'POST', body: JSON.stringify(input),
+      })).sponsor)
+    },
+    async updateSponsor(id, patch) {
+      return normalizeSponsor(record(await request(`/crm/sponsors/${encodeURIComponent(id)}`, {
+        method: 'PATCH', body: JSON.stringify(patch),
+      })).sponsor)
+    },
+    async sponsorSummary(event) {
+      return normalizeSponsorSummary(await request(`/crm/sponsors/summary?${new URLSearchParams({ event })}`))
     },
   }
 }
