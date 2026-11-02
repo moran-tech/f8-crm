@@ -230,7 +230,7 @@ export function createApi(getSession: () => Session | null, onUnauthorized?: () 
         const code = text(data.error)
         const message = code === 'platinum_taken'
           ? `Platinum is already taken by ${text(record(data.holder).business_name, 'another sponsor')}. Choose another level.`
-          : code === 'duplicate' ? 'A sponsor with this business name already exists for this event.'
+          : code === 'duplicate' ? 'A sponsor with this business name or email already exists'
             : result.status === 400 ? 'Check the sponsor fields and try again. The CRM could not validate these details.'
               : 'This sponsor changed while you were editing. Check the details and try again.'
         throw new ApiError(message, result.status, code)

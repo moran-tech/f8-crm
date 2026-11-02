@@ -4,6 +4,7 @@ import type { CrmApi, Sponsor, SponsorLevel, SponsorPatch, SponsorStatus } from 
 import { ApiError } from '../api/client.ts'
 import { EmptyState, ErrorState, Icon, Skeleton, SponsorStatusPill } from '../components/ui.tsx'
 import { useResource } from '../hooks.ts'
+import { replaceHashRoute } from '../hashRoute.ts'
 import { plainDate, sponsorAmount, sponsorEvent, sponsorLevels, sponsorStatuses } from '../sponsors.ts'
 import { eventDate, money, safeEmailLink } from '../utils.ts'
 
@@ -32,6 +33,7 @@ function SponsorEditor({ initial, api, onSaved, setNavigationGuard }: {
   const platinumTaken = !!summary.data?.platinum.taken && !ownsPlatinum
   const dirty = JSON.stringify(draft) !== baseline
   const emailLink = safeEmailLink(draft.email)
+  const packagePrice = sponsorLevels.find(level => level.value === draft.level)?.cents
 
   useEffect(() => {
     setNavigationGuard(() => !saving && (!dirty || window.confirm('You have unsaved sponsor changes. Discard them and leave?')))
@@ -84,7 +86,7 @@ function SponsorEditor({ initial, api, onSaved, setNavigationGuard }: {
       if (!detail) {
         setNavigationGuard(() => true)
         // Replace /new so browser Back never returns to a submitted form.
-        window.location.replace(`${window.location.pathname}${window.location.search}#/sponsors/${encodeURIComponent(updated.id)}`)
+        replaceHashRoute(`#/sponsors/${encodeURIComponent(updated.id)}`)
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save this sponsor. Try again.')
@@ -117,9 +119,9 @@ function SponsorEditor({ initial, api, onSaved, setNavigationGuard }: {
           {summary.error && <div className="sponsor-availability-error" role="alert"><p className="small">Could not check Platinum availability. The CRM will check again when you save.</p><button className="text-button" type="button" onClick={summary.retry}>Retry availability</button></div>}
           {summary.data && <p id="platinum-availability" className={`sponsor-availability ${platinumTaken ? 'unavailable' : ''}`}>{summary.data.platinum.taken ? ownsPlatinum ? 'Platinum is reserved for this sponsor.' : `Platinum is already taken by ${holder?.business_name ?? 'another sponsor'}.` : 'Platinum is open. Just one $1,000 spot.'}</p>}
           <div className="sponsor-edit-grid"><label className="field-label">Level<select value={draft.level} aria-describedby={summary.data ? 'platinum-availability' : undefined} onChange={event => changeLevel(event.target.value as SponsorLevel | '')}><option value="">None</option>{sponsorLevels.map(level => <option key={level.value} value={level.value} disabled={level.value === 'platinum' && platinumTaken}>{level.label} {money(level.cents)}{level.value === 'platinum' && platinumTaken ? ' · taken' : ''}</option>)}</select></label>
-            <label className="field-label">Amount (CAD)<span className="amount-input"><span aria-hidden="true">$</span><input type="text" inputMode="decimal" value={draft.amount} onChange={event => update({ amount: event.target.value })} placeholder="Not set" /></span></label>
+            <label className="field-label">Amount (CAD)<span className="amount-input"><span aria-hidden="true">$</span><input type="text" inputMode="decimal" value={draft.amount} onChange={event => update({ amount: event.target.value })} placeholder={packagePrice == null ? 'Not set' : `Package price (${money(packagePrice)})`} aria-describedby="sponsor-amount-help" /></span></label>
           </div>
-          <p className="small muted sponsor-field-help">Choosing a level fills the amount only when it’s blank.</p>
+          <p id="sponsor-amount-help" className="small muted sponsor-field-help">{packagePrice != null && !draft.amount.trim() ? `Uses package price (${money(packagePrice)}) when saved.` : 'Choosing a level fills the amount only when it’s blank.'}</p>
         </section>
         <section className="card event-status-card"><label className="field-label">Notes<textarea rows={4} value={draft.notes} onChange={event => update({ notes: event.target.value })} placeholder="The pitch, the next step, a little context…" /></label><label className="field-label sponsor-source">Source<input value={draft.source} onChange={event => update({ source: event.target.value })} placeholder="How you found this business" /></label></section>
       </fieldset>

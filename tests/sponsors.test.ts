@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { ApiError, createApi, normalizeSponsor, normalizeSponsorSummary } from '../src/api/client.ts'
 import { createDemoApi } from '../src/api/demo.ts'
-import { plainDate, sponsorAmount, sponsorStatuses } from '../src/sponsors.ts'
+import { plainDate, sponsorAmount, sponsorEffectiveAmount, sponsorLevels, sponsorStatuses } from '../src/sponsors.ts'
 import { eventDate, safeEmailLink } from '../src/utils.ts'
 
 const originalFetch = globalThis.fetch
@@ -77,7 +77,7 @@ test('sponsor conflicts and validation errors are clear without reflecting serve
   await assert.rejects(api.createSponsor({ business_name: 'Demo Prospect' }), (cause: unknown) =>
     cause instanceof ApiError && cause.code === 'platinum_taken' && cause.status === 409 && /already taken by Demo Holder/.test(cause.message))
   globalThis.fetch = async () => Response.json({ error: 'duplicate' }, { status: 409 })
-  await assert.rejects(api.updateSponsor('fake', {}), /business name already exists/)
+  await assert.rejects(api.updateSponsor('fake', {}), /A sponsor with this business name or email already exists/)
   globalThis.fetch = async () => Response.json({ error: 'private internal diagnostic' }, { status: 400 })
   await assert.rejects(api.createSponsor({ business_name: '' }), /Check the sponsor fields/)
   globalThis.fetch = async () => new Response('bad json', { status: 409 })
@@ -135,6 +135,45 @@ test('demo POST, partial PATCH, null clears, isolation, and summary recalculatio
   await assert.rejects(api.sponsor('missing'), /could not be found/)
 })
 
+test('demo defaults null or omitted amounts to the package price on POST and PATCH', async () => {
+  const api = createDemoApi(0)
+  const event_key = 'demo-amounts'
+  for (const level of sponsorLevels) {
+    const created = await api.createSponsor({
+      event_key, business_name: `Demo ${level.label}`, level: level.value, amount_cents: null, status: 'confirmed',
+    })
+    assert.equal(created.amount_cents, level.cents)
+    assert.equal((await api.sponsor(created.id)).amount_cents, level.cents)
+    assert.equal((await api.updateSponsor(created.id, { amount_cents: 12_345 })).amount_cents, 12_345)
+    const reset = await api.updateSponsor(created.id, { amount_cents: null, status: 'interested' })
+    assert.equal(reset.amount_cents, level.cents)
+    assert.equal((await api.updateSponsor(created.id, { amount_cents: 0 })).amount_cents, 0)
+    assert.equal((await api.updateSponsor(created.id, { amount_cents: null })).amount_cents, level.cents)
+  }
+  assert.equal((await api.sponsorSummary(event_key)).committed_cents, 0)
+  assert.equal((await api.sponsorSummary(event_key)).pipeline_cents, 180_000)
+  const omitted = await api.createSponsor({ event_key, business_name: 'Demo Omitted Amount', level: 'gold', status: 'confirmed' })
+  assert.equal(omitted.amount_cents, 50_000)
+  assert.equal((await api.sponsorSummary(event_key)).committed_cents, 50_000)
+  const unpriced = await api.createSponsor({ event_key, business_name: 'Demo No Package', amount_cents: null, status: 'interested' })
+  assert.equal(unpriced.amount_cents, null)
+  assert.equal((await api.updateSponsor(unpriced.id, { amount_cents: null })).amount_cents, null)
+  assert.equal((await api.updateSponsor(unpriced.id, { level: 'silver' })).amount_cents, 30_000)
+  assert.equal((await api.updateSponsor(unpriced.id, { level: 'gold' })).amount_cents, 30_000)
+  assert.equal((await api.updateSponsor(unpriced.id, { level: 'gold', amount_cents: null })).amount_cents, 50_000)
+  assert.equal((await api.updateSponsor(unpriced.id, { level: null, amount_cents: null })).amount_cents, null)
+  assert.equal((await api.sponsorSummary(event_key)).pipeline_cents, 180_000)
+})
+
+test('summary amount fallback handles legacy null amounts without replacing custom amounts or zero', () => {
+  for (const level of sponsorLevels) {
+    assert.equal(sponsorEffectiveAmount({ level: level.value, amount_cents: null }), level.cents)
+    assert.equal(sponsorEffectiveAmount({ level: level.value, amount_cents: 123 }), 123)
+    assert.equal(sponsorEffectiveAmount({ level: level.value, amount_cents: 0 }), 0)
+  }
+  assert.equal(sponsorEffectiveAmount({ level: null, amount_cents: null }), null)
+})
+
 test('Platinum has one non-declined holder per event; failures are atomic', async () => {
   const api = createDemoApi(0)
   const first = await api.createSponsor({ business_name: 'Demo Platinum Holder', level: 'platinum', status: 'interested', amount_cents: 100_000 })
@@ -165,6 +204,26 @@ test('demo duplicate and validation rules reject invalid writes without losing d
   await assert.rejects(api.updateSponsor('missing', { notes: null }), /could not be found/)
   assert.equal((await api.sponsor(item.id)).business_name, item.business_name)
   assert.equal((await api.sponsorSummary('eoy-mixer')).total, 15)
+})
+
+test('demo email uniqueness is case-insensitive, event-scoped, and atomic on POST and PATCH', async () => {
+  const api = createDemoApi(0)
+  const first = await api.createSponsor({ business_name: 'Demo Email Owner', email: ' owner@example.com ' })
+  assert.equal(first.email, 'owner@example.com')
+  const duplicate = (cause: unknown) => cause instanceof ApiError && cause.status === 409
+    && cause.code === 'duplicate' && cause.message === 'A sponsor with this business name or email already exists'
+  await assert.rejects(api.createSponsor({ business_name: 'Demo Different Name', email: 'OWNER@example.com' }), duplicate)
+  const second = await api.createSponsor({ business_name: 'Demo Email Prospect', email: null })
+  await assert.rejects(api.updateSponsor(second.id, { email: 'OWNER@example.com', notes: 'Must not save' }), duplicate)
+  assert.equal((await api.sponsor(second.id)).email, null)
+  assert.equal((await api.sponsor(second.id)).notes, null)
+  await api.updateSponsor(first.id, { email: 'OWNER@example.com' })
+  const other = await api.createSponsor({ business_name: first.business_name, email: first.email, event_key: 'demo-other-event' })
+  await assert.rejects(api.updateSponsor(other.id, { event_key: first.event_key }), duplicate)
+  assert.equal((await api.sponsor(other.id)).event_key, 'demo-other-event')
+  await api.updateSponsor(first.id, { email: null })
+  assert.equal((await api.updateSponsor(second.id, { email: first.email })).email, first.email)
+  assert.equal((await api.sponsorSummary('eoy-mixer')).total, 17)
 })
 
 test('plain dates do not shift across timezones; cents and email links are safe', () => {

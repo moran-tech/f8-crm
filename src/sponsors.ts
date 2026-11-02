@@ -1,4 +1,4 @@
-import type { SponsorLevel, SponsorStatus } from './api/types.ts'
+import type { Sponsor, SponsorLevel, SponsorStatus } from './api/types.ts'
 
 export const sponsorEvent = 'eoy-mixer'
 export const sponsorStatuses: { value: SponsorStatus; label: string; color: string }[] = [
@@ -15,6 +15,11 @@ export const sponsorLevels: { value: SponsorLevel; label: string; cents: number 
   { value: 'silver', label: 'Silver', cents: 30_000 },
 ]
 
+/** The backend uses the package price when an amount is not supplied. */
+export function sponsorEffectiveAmount(sponsor: Pick<Sponsor, 'level' | 'amount_cents'>): number | null {
+  return sponsor.amount_cents ?? sponsorLevels.find(level => level.value === sponsor.level)?.cents ?? null
+}
+
 /** Calendar dates stay dates, never UTC timestamps. Reject invalid dates too. */
 export function plainDate(value: unknown): string | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
@@ -22,7 +27,7 @@ export function plainDate(value: unknown): string | null {
   return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : value
 }
 
-/** Undefined means invalid; null clears the optional amount. */
+/** Undefined means invalid; null uses the package price, or stays unset without a level. */
 export function sponsorAmount(value: string): number | null | undefined {
   if (!value.trim()) return null
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return undefined

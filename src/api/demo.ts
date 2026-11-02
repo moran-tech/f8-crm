@@ -3,7 +3,7 @@ import type {
   PersonSummary, PlatformStats, Sponsor, SponsorCreate, SponsorPatch, SponsorSummary,
 } from './types.ts'
 import { ApiError } from './client.ts'
-import { plainDate, sponsorEvent, sponsorLevels, sponsorStatuses } from '../sponsors.ts'
+import { plainDate, sponsorEffectiveAmount, sponsorEvent, sponsorLevels, sponsorStatuses } from '../sponsors.ts'
 
 const events: CrmEvent[] = [
   { key: 'eoy-mixer', name: 'End of Year Mixer', date: '2026-12-05', venue: 'Studio Nazrana' },
@@ -199,9 +199,12 @@ export function createDemoApi(latency = 180): CrmApi {
     }
     validateSponsor(next)
     next.business_name = next.business_name.trim()
+    next.email = next.email?.trim() || null
+    next.amount_cents = sponsorEffectiveAmount(next)
     if (sponsors.some(item => item.id !== next.id && item.event_key === next.event_key
-      && item.business_name.toLowerCase() === next.business_name.toLowerCase())) {
-      throw new ApiError('A sponsor with this business name already exists for this event.', 409, 'duplicate')
+      && (item.business_name.toLowerCase() === next.business_name.toLowerCase()
+        || (next.email !== null && item.email?.toLowerCase() === next.email.toLowerCase())))) {
+      throw new ApiError('A sponsor with this business name or email already exists', 409, 'duplicate')
     }
     const holder = platinumHolder(next.event_key, next.id)
     if (next.level === 'platinum' && next.status !== 'declined' && holder) {
@@ -256,7 +259,7 @@ export function createDemoApi(latency = 180): CrmApi {
       const today = new Date()
       const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
       const statusCount = (status: Sponsor['status']) => list.filter(item => item.status === status).length
-      const total = (status: Sponsor['status']) => list.filter(item => item.status === status).reduce((sum, item) => sum + (item.amount_cents ?? 0), 0)
+      const total = (status: Sponsor['status']) => list.filter(item => item.status === status).reduce((sum, item) => sum + (sponsorEffectiveAmount(item) ?? 0), 0)
       const data: SponsorSummary = {
         event_key: event, total: list.length,
         by_status: {
